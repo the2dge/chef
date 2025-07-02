@@ -488,10 +488,10 @@ main {
         </div>
       </div>
 
-      <img src="image/demo1.jpg" />
-      <img src="image/demo2.jpg" />
-      <img src="image/demo3.jpg" />
-      <img src="image/demo4.jpg" />
+      <img src="image/demo1.jpg" data-mobile="image/demo1_m.jpg" />
+      <img src="image/demo2.jpg" data-mobile="image/demo2_m.jpg" />
+      <img src="image/demo3.jpg" data-mobile="image/demo3_m.jpg" />
+      <img src="image/demo4.jpg" data-mobile="image/demo4_m.jpg" />
 
       <div id="pagination">
         <button class="active" data-slide="0"></button>
@@ -538,11 +538,38 @@ function setVH() {
   document.documentElement.style.setProperty('--vh', `${vh}px`);
 }
 
+// Mobile image switching function
+function switchToMobileImages() {
+  const isMobile = window.innerWidth <= 768;
+  const images = document.querySelectorAll('#slider img');
+  
+  images.forEach(img => {
+    if (isMobile && img.dataset.mobile) {
+      img.src = img.dataset.mobile;
+    } else {
+      // Get original src from the img element's original src attribute
+      const originalSrc = img.getAttribute('src').replace('_m.jpg', '.jpg');
+      img.src = originalSrc;
+    }
+  });
+}
+
 // Set on load and resize
-window.addEventListener('load', setVH);
-window.addEventListener('resize', setVH);
+window.addEventListener('load', function() {
+  setVH();
+  switchToMobileImages();
+});
+
+window.addEventListener('resize', function() {
+  setVH();
+  switchToMobileImages();
+});
+
 window.addEventListener('orientationchange', function() {
-  setTimeout(setVH, 100);
+  setTimeout(function() {
+    setVH();
+    switchToMobileImages();
+  }, 100);
 });
 
 var displacementSlider = function displacementSlider(opts) {
@@ -572,12 +599,31 @@ var displacementSlider = function displacementSlider(opts) {
   parent.appendChild(renderer.domElement);
   var loader = new THREE.TextureLoader();
   loader.crossOrigin = "anonymous";
-  images.forEach(function (img) {
-    image = loader.load(img.getAttribute("src") + "?v=" + Date.now());
-    image.magFilter = image.minFilter = THREE.LinearFilter;
-    image.anisotropy = renderer.capabilities.getMaxAnisotropy();
-    sliderImages.push(image);
-  });
+  
+  // Function to load textures with mobile detection
+  function loadTextures() {
+    sliderImages = []; // Clear existing textures
+    const isMobile = window.innerWidth <= 768;
+    
+    images.forEach(function (img) {
+      const imageSrc = isMobile && img.dataset.mobile ? img.dataset.mobile : img.getAttribute("src");
+      image = loader.load(imageSrc + "?v=" + Date.now());
+      image.magFilter = image.minFilter = THREE.LinearFilter;
+      image.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      sliderImages.push(image);
+    });
+    
+    // Update material uniforms with new textures
+    if (mat) {
+      mat.uniforms.currentImage.value = sliderImages[currentSlide];
+      mat.uniforms.nextImage.value = sliderImages[(currentSlide + 1) % sliderImages.length];
+      mat.uniforms.currentImage.needsUpdate = true;
+      mat.uniforms.nextImage.needsUpdate = true;
+    }
+  }
+  
+  // Initial texture loading
+  loadTextures();
   var scene = new THREE.Scene();
   scene.background = new THREE.Color(0x23272a);
   var camera = new THREE.OrthographicCamera(renderWidth / -2, renderWidth / 2, renderHeight / 2, renderHeight / -2, 1, 1000);
@@ -711,8 +757,16 @@ var displacementSlider = function displacementSlider(opts) {
   });
 
   addEvents();
+  
+  // Handle window resize and mobile image switching
   window.addEventListener("resize", function (e) {
     renderer.setSize(renderW, renderH);
+    // Reload textures if switching between mobile/desktop
+    const newIsMobile = window.innerWidth <= 768;
+    const currentIsMobile = images[0].src.includes('_m.jpg');
+    if (newIsMobile !== currentIsMobile) {
+      loadTextures();
+    }
   });
   var _animate = function animate() {
     requestAnimationFrame(_animate);
